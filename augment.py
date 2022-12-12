@@ -22,7 +22,7 @@ if __name__ == '__main__':
     print(len(train_df))
     new_train_df = train_df.copy(deep=True)
     for index, value in tqdm(train_df.iterrows()):
-        if value['Code'] in [3, 6, 9, 12, 14]:
+        if value['Code'] in [3, 6, 9, 12, 14, 23, 26]:
             img = read_image(os.path.join(images_path, value['FileName']), mode=ImageReadMode.RGB)
             randomHorizontalFlip = transforms.RandomHorizontalFlip(p=1)(img)
             write_image(randomHorizontalFlip, value['FileName'] + '_HorizontalFlip.png', new_train_df, value['Code'])

@@ -11,8 +11,11 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, accuracy_score, recall_score
 from tqdm.auto import tqdm
+from tensorboardX import SummaryWriter
+import random
+from loss import MultiClassFocalLossWithAlpha
 
-lr = 1e-5
+lr = 5e-4
 epochs = 25
 batch_size = 16
 img_path = 'cloud_dataset/images'
@@ -24,27 +27,48 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 weights = DenseNet161_Weights.DEFAULT
 preprocess = weights.transforms()
 
-img_transform = transforms.RandomApply(nn.ModuleList[
-    transforms.Resize(232),
+img_transform = transforms.RandomApply([
+    transforms.Resize(1120),
     transforms.RandomCrop(224),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(0.5, 0.5, 0.5)
 ], p=0.5)
+
+writer = SummaryWriter()
+
+freeze_layer_num = 2
+
+
+def write_log(name, value, step):
+    writer.add_scalar(name + '_accuracy', value[0], global_step=step)
+    writer.add_scalar(name + '_recall', value[1], global_step=step)
+    writer.add_scalar(name + '_f1', value[2], global_step=step)
+
+
+def freeze(model, freeze_layer_num):
+    for i, param in enumerate(model.parameters()):
+        if i < 484 - freeze_layer_num * 6:
+            param.requires_grad = False
 
 
 def train(model, dataloader, criterion, optimizer, scheduler):
     progress_bar = tqdm(range(len(dataloader)))
     y_true, y_pred = [], []
     alpha = 1.0
+    probility = random.randint(0, 10)
     for file_name, X, y in dataloader:
         X = X.to(device)
-        lam = np.random.beta(alpha, alpha)
-        index = torch.randperm(X.size(0)).cuda()
-        X, X_mix = X, X[index]
-        y, y_mix = y, y[index]
-        X = lam * X + (1 - lam) * X_mix
-        out = model(X).cpu()
-        loss = lam * criterion(out, y) + (1 - lam) * criterion(out, y_mix)
+        if probility > 7:
+            lam = np.random.beta(alpha, alpha)
+            index = torch.randperm(X.size(0)).cuda()
+            X, X_mix = X, X[index]
+            y, y_mix = y, y[index]
+            X = lam * X + (1 - lam) * X_mix
+            out = model(X).cpu()
+            loss = lam * criterion(out, y) + (1 - lam) * criterion(out, y_mix)
+        else:
+            out = model(X).cpu()
+            loss = criterion(out, y)
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -55,7 +79,8 @@ def train(model, dataloader, criterion, optimizer, scheduler):
         y_pred.append(out.argmax(dim=1))
     y_true = torch.cat(y_true)
     y_pred = torch.cat(y_pred)
-    return accuracy_score(y_true, y_pred), recall_score(y_true, y_pred), f1_score(y_true, y_pred, average='macro')
+    return accuracy_score(y_true, y_pred), recall_score(y_true, y_pred, average='macro'), f1_score(y_true, y_pred,
+                                                                                                   average='macro')
 
 
 def eval(model, dataloader):
@@ -68,7 +93,8 @@ def eval(model, dataloader):
             y_pred.append(out.argmax(dim=1))
     y_true = torch.cat(y_true)
     y_pred = torch.cat(y_pred)
-    return accuracy_score(y_true, y_pred), recall_score(y_true, y_pred), f1_score(y_true, y_pred, average='macro')
+    return accuracy_score(y_true, y_pred), recall_score(y_true, y_pred, average='macro'), f1_score(y_true, y_pred,
+                                                                                                   average='macro')
 
 
 if __name__ == '__main__':
@@ -82,13 +108,18 @@ if __name__ == '__main__':
 
     model = densenet161(weights=weights).to(device)
     model.classifier = nn.Linear(in_features=2208, out_features=28, device=device)
-    print(model)
     # model.heads.head = nn.Linear(in_features=1024, out_features=28, device=device)
+
+    '''
+    for i, param in enumerate(model.parameters()):
+        if i < 484 - freeze_layer_num * 2:
+            param.requires_grad = False
+    '''
 
     optimizer = Adam(model.parameters(), lr=lr)
     total_iters = epochs * len(train_dataloader)
     scheduler = LinearLR(optimizer, start_factor=1, end_factor=0, total_iters=total_iters)
-    criterion = nn.CrossEntropyLoss()
+    criterion = MultiClassFocalLossWithAlpha(reduction='sum')
     best_f1 = 0
     best_state_dict = {}
     for epoch in range(epochs):
@@ -96,10 +127,12 @@ if __name__ == '__main__':
         model.train()
         acc, rec, f1 = train(model, train_dataloader, criterion, optimizer, scheduler)
         print(f'Train Acc: {acc}, Rec: {rec}, F1 score: {f1}')
+        write_log('train', [acc, rec, f1], epoch + 1)
         model.eval()
         acc, rec, f1 = eval(model, eval_dataloader)
         if f1 > best_f1:
             best_f1 = f1
             best_state_dict = model.state_dict()
         print(f'Eval Acc: {acc}, Rec: {rec}, F1 score: {f1}')
+        write_log('eval', [acc, rec, f1], epoch + 1)
     torch.save(best_state_dict, 'densenet161.pth')
