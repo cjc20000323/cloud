@@ -24,7 +24,7 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 weights = DenseNet161_Weights.DEFAULT
 preprocess = weights.transforms()
 
-img_transform = transforms.RandomApply([
+img_transform = transforms.RandomApply(nn.ModuleList[
     transforms.Resize(232),
     transforms.RandomCrop(224),
     transforms.RandomHorizontalFlip(),
