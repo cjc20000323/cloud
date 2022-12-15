@@ -22,7 +22,7 @@ if __name__ == '__main__':
     print(len(train_df))
     new_train_df = train_df.copy(deep=True)
     for index, value in tqdm(train_df.iterrows()):
-        if value['Code'] in [3, 6, 9, 12, 14, 23, 26]:
+        if value['Code'] in [1, 3, 4, 5, 6, 9, 11, 12, 13, 14, 16, 22, 23, 24, 26]:
             img = read_image(os.path.join(images_path, value['FileName']), mode=ImageReadMode.RGB)
             randomHorizontalFlip = transforms.RandomHorizontalFlip(p=1)(img)
             write_image(randomHorizontalFlip, value['FileName'] + '_HorizontalFlip.png', new_train_df, value['Code'])
@@ -32,6 +32,8 @@ if __name__ == '__main__':
             write_image(randomRotation, value['FileName'] + '_Rotation.png', new_train_df, value['Code'])
             randomGray = transforms.Grayscale()(img)
             write_image(randomGray, value['FileName'] + '_Gray.png', new_train_df, value['Code'])
+            # gauss = transforms.GaussianBlur(7, 3)
+            # write_image(gauss, value['FileName'] + '_Gauss.png', new_train_df, value['Code'])
             img = transforms.Resize(1080)(img)
             TenCrop = transforms.TenCrop(720)(img)
             for index, data in enumerate(TenCrop):

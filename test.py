@@ -1,7 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
 from torch import nn
-from torchvision.models import densenet161, DenseNet161_Weights
+from torchvision.models import densenet161, DenseNet161_Weights, densenet121, DenseNet121_Weights, resnet101, \
+    ResNet101_Weights, resnet152, ResNet152_Weights, efficientnet_b0, EfficientNet_B0_Weights
 import torchvision.transforms as transforms
 from torch.optim import Adam
 from torch.optim.lr_scheduler import LinearLR
@@ -11,14 +12,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, accuracy_score
 from tqdm.auto import tqdm
 
-
-checkpoint = 'densenet161.pth'
+checkpoint = 'efficientnetB2.pth'
 batch_size = 32
 img_path = 'cloud_dataset/images'
 test_csv = 'cloud_dataset/test.csv'
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-preprocess = DenseNet161_Weights.DEFAULT.transforms()
+preprocess = EfficientNet_B0_Weights.DEFAULT.transforms()
 
 img_transform = transforms.Compose([
     transforms.Resize(232),
@@ -26,7 +26,6 @@ img_transform = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness=0.5, contrast=0.5, hue=0.5),
 ])
-
 
 
 def test(model, dataloader):
@@ -48,8 +47,11 @@ if __name__ == '__main__':
     test_dataset = CloudDataset(test_df, img_path, preprocess, img_transform, True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    model = densenet161().to(device)
-    model.classifier = nn.Linear(in_features=2208, out_features=28, device=device)
+    model = efficientnet_b0().to(device)
+    # model.classifier = nn.Linear(in_features=1024, out_features=28, device=device)
+    # model.fc = nn.Linear(in_features=2048, out_features=28, device=device)
+    model.classifier = nn.Sequential(nn.Dropout(p=0.2, inplace=True),
+                                     nn.Linear(in_features=1280, out_features=28, bias=True, device=device))
     model.load_state_dict(torch.load(checkpoint))
 
     model.eval()

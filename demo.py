@@ -10,8 +10,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, accuracy_score
 from tqdm.auto import tqdm
-alpha = torch.tensor([2, 3, 5])
-target = torch.tensor([0, 1, 2, 1, 0])
+from transformers import BeitModel
 
-alpha = alpha[target]
-print(alpha)
+config = 'microsoft/beit-base-patch16-224-pt22k-ft22k'
+model = BeitModel.from_pretrained(config)
+print(model)

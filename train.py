@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch import nn
-from torchvision.models import densenet161, DenseNet161_Weights
+from torchvision.models import densenet161, DenseNet161_Weights, densenet121, DenseNet121_Weights, resnet101, ResNet101_Weights, resnet152, ResNet152_Weights, efficientnet_b0, EfficientNet_B0_Weights, resnet50, ResNet50_Weights
 import torchvision.transforms as transforms
 from torch.optim import Adam
 from torch.optim.lr_scheduler import LinearLR
@@ -14,6 +14,7 @@ from tqdm.auto import tqdm
 from tensorboardX import SummaryWriter
 import random
 from loss import MultiClassFocalLossWithAlpha
+from transformers import BeitModel
 
 lr = 5e-4
 epochs = 25
@@ -24,12 +25,12 @@ test_csv = 'cloud_dataset/test.csv'
 aug_train_csv = 'cloud_dataset/new_train.csv'
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-weights = DenseNet161_Weights.DEFAULT
+weights = ResNet50_Weights.DEFAULT
 preprocess = weights.transforms()
 
 img_transform = transforms.RandomApply([
-    transforms.Resize(1120),
-    transforms.RandomCrop(224),
+    transforms.Resize(400),
+    transforms.RandomCrop(384),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(0.5, 0.5, 0.5)
 ], p=0.5)
@@ -106,9 +107,12 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=True)
 
-    model = densenet161(weights=weights).to(device)
-    model.classifier = nn.Linear(in_features=2208, out_features=28, device=device)
+    model = resnet50(weights=weights).to(device)
+    print(model)
+    # model.classifier = nn.Linear(in_features=2208, out_features=28, device=device)
     # model.heads.head = nn.Linear(in_features=1024, out_features=28, device=device)
+    model.fc = nn.Linear(in_features=2048, out_features=28, device=device)
+    # model.classifier = nn.Sequential(nn.Dropout(p=0.2, inplace=True), nn.Linear(in_features=1280, out_features=28, bias=True, device=device))
 
     '''
     for i, param in enumerate(model.parameters()):
@@ -119,11 +123,12 @@ if __name__ == '__main__':
     optimizer = Adam(model.parameters(), lr=lr)
     total_iters = epochs * len(train_dataloader)
     scheduler = LinearLR(optimizer, start_factor=1, end_factor=0, total_iters=total_iters)
-    criterion = MultiClassFocalLossWithAlpha(reduction='sum')
+    criterion = nn.CrossEntropyLoss()
     best_f1 = 0
     best_state_dict = {}
+    state_dict = {}
     for epoch in range(epochs):
-        print(f'Epoch: {epoch}')
+        print(f'Epoch: {epoch + 1}')
         model.train()
         acc, rec, f1 = train(model, train_dataloader, criterion, optimizer, scheduler)
         print(f'Train Acc: {acc}, Rec: {rec}, F1 score: {f1}')
@@ -135,4 +140,4 @@ if __name__ == '__main__':
             best_state_dict = model.state_dict()
         print(f'Eval Acc: {acc}, Rec: {rec}, F1 score: {f1}')
         write_log('eval', [acc, rec, f1], epoch + 1)
-    torch.save(best_state_dict, 'densenet161.pth')
+    torch.save(best_state_dict, 'resnet50.pth')
